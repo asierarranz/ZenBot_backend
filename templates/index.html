@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>ZenBot</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #181a1b;
+            color: #d0cdc8;
+        }
+        .quote {
+            font-family: 'Dancing Script', cursive;
+            font-style: italic;
+            color: #d4af37; 
+            font-size: 1.2em;
+        }
+        .form-control {
+            background-color: #181a1b;
+            color: #d0cdc8;
+            border: 1px solid #d0cdc8;
+        }
+        .form-control::placeholder {
+            color: #a0a0a0;
+            font-style: italic;
+        }
+        .form-control:focus {
+            background-color: #181a1b; /* Maintain dark background on focus */
+            color: #d0cdc8;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            border: none;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        .alert-success {
+            background-color: #2e7d32; /* Dark green */
+            border-color: #2e7d32;
+            color: #d0cdc8; /* Very light green */
+        }
+        .alert-warning {
+            background-color: #333;
+            border-color: #444;
+            color: #d0cdc8;
+        }
+        .list-group-item {
+            background-color: #181a1b;
+            border: 1px solid #d0cdc8;
+            color: #d0cdc8;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1 class="mt-5">ZenBot</h1>
+    <p class="lead">Generate an AI Yoga Nidra meditation based on your input (with background GenAI music)</p>
+    <form method="post" action="/" id="meditationForm">
+        {{ form.hidden_tag() }}
+        <div class="form-group">
+            {{ form.prompt.label(class="form-control-label") }}
+            {{ form.prompt(class="form-control", rows=5) }}
+        </div>
+        <div class="form-group">
+            {{ form.submit(class="btn btn-primary") }}
+        </div>
+    </form>
+    <div id="loadingMessage" class="alert alert-warning" role="alert" style="display: none;">
+        <span class="quote">{{ quote }}</span> <br>
+        This will take up to a minute... Please, breathe in, breathe out.
+    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="mt-4">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" role="alert">
+                        {{ message|safe }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+    {% if previous_generations %}
+        <h3>Previous Generations</h3>
+        <ul class="list-group mt-4">
+            {% for generation in previous_generations %}
+                <li class="list-group-item">
+                    <a href="{{ url_for('static', filename=generation.filename) }}" download>
+                        Download "{{ generation.first_words }}" generated on {{ generation.timestamp }}
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+<script>
+    document.getElementById('meditationForm').onsubmit = function() {
+        document.getElementById('loadingMessage').style.display = 'block';
+    };
+</script>
+</body>
+</html>

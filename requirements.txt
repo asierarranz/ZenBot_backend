@@ -1,0 +1,5 @@
+python-dotenv
+flask
+Flask-WTF
+requests
+pydub
