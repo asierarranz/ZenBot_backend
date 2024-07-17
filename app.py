@@ -8,6 +8,7 @@ from markupsafe import Markup
 import os
 import random
 import datetime
+import logging
 
 # Load environment variables
 load_dotenv()
@@ -16,7 +17,9 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'  # Replace with your actual secret key
 
-# Define FlaskForm for the meditation input
+# Set up logging
+logging.basicConfig(filename='error.log', level=logging.ERROR)
+
 class MeditationForm(FlaskForm):
     prompt = TextAreaField(
         'Enter the topic for your meditation:',
@@ -25,7 +28,6 @@ class MeditationForm(FlaskForm):
     )
     submit = SubmitField('Generate Meditation')
 
-# List of spiritual quotes to display randomly
 spiritual_quotes = [
     "The mind is everything. What you think you become. - Buddha",
     "Peace comes from within. Do not seek it without. - Buddha",
@@ -43,30 +45,61 @@ spiritual_quotes = [
     "Strength does not come from physical capacity. It comes from an indomitable will. - Mahatma Gandhi"
 ]
 
-# Function to format timestamp
 def format_timestamp(timestamp):
     dt = datetime.datetime.strptime(timestamp, "%Y%m%d%H%M")
     return dt.strftime("%B %d, %Y at %I:%M %p")
 
-# Main route to render and process the meditation form
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    form = MeditationForm()
-    quote = random.choice(spiritual_quotes)
-    if 'previous_generations' not in session:
-        session['previous_generations'] = []
+    try:
+        form = MeditationForm()
+        quote = random.choice(spiritual_quotes)
+        if 'previous_generations' not in session:
+            session['previous_generations'] = []
 
-    if form.validate_on_submit():
-        prompt = form.prompt.data
+        if form.validate_on_submit():
+            prompt = form.prompt.data
+            gpt_response = generate_meditation_script(prompt)
+            if not gpt_response:
+                flash('Failed to generate meditation script', 'danger')
+                return render_template('index.html', form=form, quote=quote, previous_generations=session['previous_generations'])
+
+            audio_path = generate_audio(gpt_response, prompt)
+            if not audio_path:
+                flash('Failed to generate audio', 'danger')
+                return render_template('index.html', form=form, quote=quote, previous_generations=session['previous_generations'])
+
+            audio_filename = os.path.basename(audio_path)
+            first_words = " ".join(audio_filename.split('_')[1:5])
+            timestamp = audio_filename.split('_')[-1].split('.')[0]
+            formatted_time = format_timestamp(timestamp)
+
+            download_link = url_for('static', filename=audio_filename)
+            flash(Markup(f'Meditation generated successfully! <a href="{download_link}" download>Download it from here ({first_words})</a>'), 'success')
+
+            session['previous_generations'].append({'filename': audio_filename, 'first_words': first_words, 'timestamp': formatted_time})
+            session.modified = True
+
+            return redirect(url_for('index'))
+        
+        return render_template('index.html', form=form, quote=quote, previous_generations=session['previous_generations'])
+    except Exception as e:
+        app.logger.error(f"Error occurred: {e}")
+        return "An error occurred, please try again later.", 500
+
+@app.route('/generate_meditation', methods=['POST'])
+def generate_meditation():
+    try:
+        data = request.json
+        prompt = data.get('prompt', '')
+
         gpt_response = generate_meditation_script(prompt)
         if not gpt_response:
-            flash('Failed to generate meditation script', 'danger')
-            return render_template('index.html', form=form, quote=quote, previous_generations=session['previous_generations'])
-
+            return jsonify({'error': 'Failed to generate meditation script'}), 500
+        
         audio_path = generate_audio(gpt_response, prompt)
         if not audio_path:
-            flash('Failed to generate audio', 'danger')
-            return render_template('index.html', form=form, quote=quote, previous_generations=session['previous_generations'])
+            return jsonify({'error': 'Failed to generate audio'}), 500
 
         audio_filename = os.path.basename(audio_path)
         first_words = " ".join(audio_filename.split('_')[1:5])
@@ -74,39 +107,13 @@ def index():
         formatted_time = format_timestamp(timestamp)
 
         download_link = url_for('static', filename=audio_filename)
-        flash(Markup(f'Meditation generated successfully! <a href="{download_link}" download>Download it from here ({first_words})</a>'), 'success')
-
         session['previous_generations'].append({'filename': audio_filename, 'first_words': first_words, 'timestamp': formatted_time})
         session.modified = True
 
-        return redirect(url_for('index'))
-    
-    return render_template('index.html', form=form, quote=quote, previous_generations=session['previous_generations'])
-
-# API endpoint to generate meditation via POST request
-@app.route('/generate_meditation', methods=['POST'])
-def generate_meditation():
-    data = request.json
-    prompt = data.get('prompt', '')
-
-    gpt_response = generate_meditation_script(prompt)
-    if not gpt_response:
-        return jsonify({'error': 'Failed to generate meditation script'}), 500
-    
-    audio_path = generate_audio(gpt_response, prompt)
-    if not audio_path:
-        return jsonify({'error': 'Failed to generate audio'}), 500
-
-    audio_filename = os.path.basename(audio_path)
-    first_words = " ".join(audio_filename.split('_')[1:5])
-    timestamp = audio_filename.split('_')[-1].split('.')[0]
-    formatted_time = format_timestamp(timestamp)
-
-    download_link = url_for('static', filename=audio_filename)
-    session['previous_generations'].append({'filename': audio_filename, 'first_words': first_words, 'timestamp': formatted_time})
-    session.modified = True
-
-    return jsonify({'audio_url': download_link, 'first_words': first_words, 'timestamp': formatted_time})
+        return jsonify({'audio_url': download_link, 'first_words': first_words, 'timestamp': formatted_time})
+    except Exception as e:
+        app.logger.error(f"Error occurred: {e}")
+        return jsonify({'error': 'An error occurred, please try again later.'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
